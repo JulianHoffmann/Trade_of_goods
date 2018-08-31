@@ -1,0 +1,451 @@
+## ---- ANN Regression ----
+
+
+# Set the working directory
+setwd("D:/Dropbox/Cloud - Master's - Docs/DISSERTATION/Maritime/Maritime Data")
+
+#install.packages("mlbench")
+#install.packages("nnet")
+library(nnet)
+library(mlbench)
+
+
+# cdata_ann<-cdata[c(3,14:28)]
+# 
+# write.csv(cdata_ann, file = "cdata_ann3.csv")
+
+cdata_ann<-read.csv("D:/Dropbox/Cloud - Master's - Docs/DISSERTATION/Maritime/Maritime Data/cdata_ann3.csv")
+cdata6_ann<-read.csv("D:/Dropbox/Cloud - Master's - Docs/DISSERTATION/Maritime/Maritime Data/cdata_resumen_net6.csv")
+
+cdata16_ann<-read.csv("D:/Dropbox/Cloud - Master's - Docs/DISSERTATION/Maritime/Maritime Data/cdata_resumen_net16.csv")
+
+cdata_ann1_6 <-subset(cdata6_ann[c("pair","TradeFlow","exporter_gdp","exporter_gdp.pc","importer_gdp", "importer_gdp.pc","importer_remote", "exporter_remote","dist","contig","fta_wto","comlang","colony")])
+
+#no connectivity
+cdata_ann1 <-subset(cdata16_ann[c("pair","TradeFlow","exporter_gdp","exporter_gdp.pc","importer_gdp", "importer_gdp.pc","importer_remote", "exporter_remote","dist","contig","fta_wto","comlang","colony","deg_out16_O","deg_out16_D","MaxShipSize","numTrans","Maxmincarriers")])
+cdata_ann <- cdata_ann1
+
+
+##Connectivity
+# cdata_ann_c <-subset(cdata16_ann[c("pair","TradeFlow","exporter_gdp","exporter_gdp.pc","importer_gdp", "importer_gdp.pc","importer_remote", "exporter_remote","dist","contig","fta_wto","comlang","colony","ComDir","numTrans","Maxmincarriers","MaxShipSize","DCon")])
+# 
+# cdata_ann <- cdata_ann_c
+
+#log
+cdata_ann$dist <- cdata_ann$dist
+cdata_ann$exporter_gdp <- cdata_ann$exporter_gdp
+cdata_ann$importer_gdp <- cdata_ann$importer_gdp
+#factors
+cdata_ann$colony <- as.factor(cdata_ann$colony)
+cdata_ann$comlang <- as.factor(cdata_ann$comlang)
+cdata_ann$contig <- as.factor(cdata_ann$contig)
+cdata_ann$fta_wto <- as.factor(cdata_ann$fta_wto)
+
+#cdata_ann <- data.frame(cdata[c(3,12,13,17:30)])
+
+#cdata_ann$Year <-as.factor(cdata_ann$Year)
+cdata_ann$dist <-(as.numeric(cdata_ann$dist))
+
+# cdata_ann<-cdata_ann[!(cdata_ann$pair=="BEN-PRT"),]
+# cdata_ann<-cdata_ann[!(cdata_ann$pair=="MUS-TTO"),]
+# cdata_ann<-cdata_ann[!(cdata_ann$pair=="MUS-LBR"),]
+# cdata_ann<-cdata_ann[!(cdata_ann$pair=="NAM-TON"),]
+# cdata_ann<-cdata_ann[!(cdata_ann$pair=="MUS-SUR"),]
+# cdata_ann<-cdata_ann[!(cdata_ann$pair=="GUY-GEO"),]
+# cdata_ann<-cdata_ann[!(cdata_ann$pair=="GEO-PAN"),]
+# cdata_ann<-cdata_ann[!(cdata_ann$pair=="MDG-HTI"),]
+
+
+
+cdata_ann_ans <- subset(cdata_ann, select = pair)
+
+
+#cdata_ann <-cdata_ann[-1]
+##.http://uc-r.github.io/ann_regression
+#install.packages("neuralnet")
+
+library(tidyverse)
+library(neuralnet)
+library(GGally)
+
+##Prior to regression ANN construction we first must split the Yacht data set into test and training data sets. Before we split, first scale each feature to fall in the [0,1]interval.
+
+# Scale the Data
+## Trade
+cdata_ann$TradeFlow <- ifelse(cdata_ann$TradeFlow == 0,1,cdata_ann$TradeFlow)
+#cdata_ann$TradeFlow <- log(cdata_ann$TradeFlow)
+
+#min and max of data set
+min_tr <- min(cdata_ann$TradeFlow)
+max_tr <- max(cdata_ann$TradeFlow)
+
+#standardize
+cdata_ann$TradeFlow = (cdata_ann$TradeFlow-min_tr)/(max_tr-min_tr)
+
+summary(cdata_ann$TradeFlow)
+
+
+#separate, flow
+cdata_ann_flow <- subset(cdata_ann, select = c(TradeFlow,pair))
+#cdata_ann$TradeFlow <- cdata_ann$TradeFlow
+
+#standardize
+scale01 <- function(x){
+  (x - min(x)) / (max(x) - min(x))
+}
+
+#tonorm <- 9
+
+#No connectivity
+cdata_ann2 <- cdata_ann[c(3:9,14:18)] %>%
+  mutate_all(scale01)
+
+# #Connectivity
+# cdata_ann2 <- cdata_ann[c(3:9,14:18)] %>%
+#   mutate_all(scale01)
+
+#cdata_ann <-cdata_ann[c(2:6)]
+
+
+#put answzers back in
+cdata_ann3<-cbind( cdata_ann_flow[1],cdata_ann2,cdata_ann[10:13],cdata_ann_ans)
+
+#name again
+cdata_ann <- cdata_ann3
+
+hist(cdata_ann$TradeFlow)
+
+summary(cdata_ann$TradeFlow)
+
+#scattter Matrix
+#install.packages("GGally")
+library(GGally)
+V<-17
+#ggpairs(cdata_ann[c(1:V)], title = "Scatterplot Matrix of the Features of the Data Set")
+
+colSums(is.na(cdata_ann))
+
+#To view the structure of the dataset :
+str(cdata_ann)
+
+#factors
+cdata_ann$colony <- as.factor(cdata_ann$colony)
+cdata_ann$comlang <- as.factor(cdata_ann$comlang)
+cdata_ann$contig <- as.factor(cdata_ann$contig)
+cdata_ann$fta_wto <- as.factor(cdata_ann$fta_wto)
+
+str(cdata_ann)
+
+
+set.seed(5555) #this number is arbitrary but it allows you to repeat your results. As nnet assigns weights at random, if you do not set a seed, your results will be (slightly) different every time.
+
+
+# This code fits a neural network model. medv is the parameter which we are trying to predict. Here it is divided by 50 to scale the inputs to the 0-1 range (note this is because the data is scaled between 0-50 (thousand). In other datasets you may need to scale the data in different ways). The ~. Indicates that all the other variables in the dataset are being used to predict medv. If you wanted to use a selection or variables, rather than all, the code would look like this
+
+# Split into test and train sets
+#set.seed(5555)
+
+
+#We then provided a seed for reproducible results and randomly extracted (without replacement) 80% of the observations to build the Yacht_Data_Train data set. 
+
+## ---- Splitt into TRAIN and Test Data
+#Using dplyr's anti_join() function we extracted all the observations not within the cdata_ann_train data set as our test data set in cdata_ann_test
+
+cdata_ann_traina <- sample_frac(tbl = cdata_ann, replace = FALSE, size = 0.80)
+cdata_ann_train <- cdata_ann_traina[c(1:V)]
+
+
+cdata_ann_testa <- anti_join(cdata_ann, cdata_ann_train)
+cdata_ann_test <- cdata_ann_testa[c(1:V)]
+
+mar_tra.nnet<- nnet(TradeFlow ~., data=cdata_ann_train[c(1:V)], size=4)
+
+#Here you would be trying to predict median house values
+#--using per capita crime rate,
+#--distances to five Boston employment centres 
+#--and full value property tax rate alone. 
+
+#The size parameter sets the number of hidden nodes in the middle layer of the network, in this case 4.
+#This network can now be used to predict:
+
+mar_tra.predict <- predict(mar_tra.nnet)
+
+#The prediction is multiplied by 50 to restore the data to its original scale. From this we can calculate the mean square error associated with prediction and plot the data to assess how well it predicts.
+
+mean((mar_tra.predict - cdata_ann_train$TradeFlow)^2)
+
+#We have fitted a single model using all the data and tested a single set of parameters. To get a better idea of capabilities of the model, it is wise to test a number of parameters. To do this we will use the caret package
+#install.packages("caret")
+require(caret)
+
+## ---- PARAMETER TUNING ----
+#mygrid is the selection of parameters that will be tested. In this instance we will test decay (also known as LEARNING RATE) or 0.1 and 0.5 and we will test networks containing 4, 5 and 6 hidden nodes.
+mygrid <- expand.grid(.decay=c(0.001), .size=c(5,7,8,9,10,11,12,13,19,20,21,25))
+# mygrid <- expand.grid(size=seq(from = 1, to = 10, by = 2),
+#                           decay = seq(from = 0.1, to = 0.5, by = 0.1))
+
+
+# start <- proc.time()[3] #START
+# mar_tra.nnet.parameters <- train(TradeFlow ~., data=cdata_ann_train, method="nnet", metric = "RMSE", maxit=100, tuneGrid=mygrid, trace=F)
+# end <- proc.time()[3] #END
+# print(paste("This took ", round(end-start, digits = 1), "seconds", sep = ""))
+
+#Here we are returning the parameters with the highest R square value. This process may take a few minutes (~2min20):
+
+# print(mar_tra.nnet.parameters) #[best R2 = 0.41, RSME : 0.01015] 
+
+#It is also wise to CROSS VALIDATE your data. To do this, use the trainControl feature of the caret package. Here we use a 10-fold cross validation, repeated 3 times : (((PLUS GRID SEARCH)))
+
+
+start <- proc.time()[3] #START
+
+fitControl <- trainControl("repeatedcv", number = 10, repeats = 3, returnResamp = "all")
+mar_tra.nnet.cv <- train(TradeFlow ~ ., data = cdata_ann_train, "nnet", metric = "RMSE", trControl = fitControl, tuneGrid=mygrid)
+
+end <- proc.time()[3] #END
+print(paste("This took ", round(end-start, digits = 1), " seconds", sep = ""))
+
+
+#Resutlst after Cross validating
+print(mar_tra.nnet.cv) #RSME = 0.0098
+
+# fitControl <- trainControl("repeatedcv", number = 10, repeats = 3, returnResamp = "all")
+# mar_tra.nnet.cv2 <- train(TradeFlow ~ ., data = cdata_ann_train, "nnet", metric = "RMSE", trControl = fitControl, tuneGrid=mygrid)
+# print(mar_tra.nnet.cv) #0.4288685
+
+
+#Here we see that in the cross validated model, the optimal model uses 6. Suggest a reason as to why this might be. To predict using the optimal mode we have discovered, you can use the following code. First identify the parameters of the final, optimal model.
+mar_tra.nnet.cv$best
+ss<-as.numeric(mar_tra.nnet.cv$best[1])
+dd<-as.numeric(mar_tra.nnet.cv$best[2])
+
+
+mar_tra.nnet.cv$best[1]
+mar_tra.nnet.cv$best[2]
+#We will now train a neural network with these OPTIMAL PARAMETERS:
+mar_tra.nnet.final <- nnet(TradeFlow ~ ., data=cdata_ann_train, size=ss, decay=dd)
+
+library(ggthemes)
+## PLOT feature relative importance ----
+
+library(NeuralNetTools)
+f_importance<-olden(mar_tra.nnet.final)
+
+# #sensitivity
+# # #export
+# tiff("lekprofile_1.tiff", width = 10, height = 5, units = 'in', res = 300)
+# 
+# lekprofile(mar_tra.nnet.final)
+# 
+# dev.off()
+
+
+##- ---- GARSON FEATURE IMPORTANCE----
+f_importance_garson<-garson(mar_tra.nnet.final)
+
+p_r_importance_garson<-f_importance_garson+
+  #scale_y_continuous(breaks = c(-25,0,25,50))+
+  theme_economist() +
+  #geom_hline(yintercept=-25, colour='white')+
+  #geom_hline(yintercept=25, colour='white')+
+  #geom_hline(yintercept=75, colour='white')+
+  theme(legend.position="right",axis.title = element_text(size = 12),
+        legend.text = element_text(size = 11),
+        axis.text = element_text(size = 13),
+        legend.title=element_text(face = "bold", size = 12),
+        panel.grid.major.x = element_line(size=0.5),
+        panel.grid.major.y= element_line(size=0.5),
+        plot.subtitle=element_text(size=13),
+        plot.caption=element_text(size=12),
+        plot.margin = unit(c(0.6, 0.6, 0.3, 0.6), "cm"))+
+  coord_flip()+ #Horizontal+
+  #scale_y_continuous(breaks = seq(-50, 75, 25))+ #breaks
+  scale_x_discrete(labels = c(numTrans="Number of transshipments", deg_out16_O = "Exporter out-degree", "MaxShipSize" ="Max ship size", Maxmincarriers ="Max min carriers",deg_out16_D = "Importer out-degree", "dist" ="Maritime distance", colony1 ="Colonial-tie dummy", comlang1 ="Common Language dummy", "importer_gdp.pc" = "Importer GDP pc.", "exporter_gdp.pc" = "Exporter GDP pc.", fta_wto1 = "Free Trade Agreement dummy", "exporter_remote"="Exporter remoteness","importer_remote"="Importer remoteness", contig1 ="Contiguity dummy", "importer_gdp" ="Importer GDP","exporter_gdp" ="Exporter GDP"  ))+
+  #scale_x_discrete(labels = c('Maritime Distance','Exporter Remoteness','Importer Remoteness','Exporter GDP cap.','Com. off. lang','Contingency','Colonial-tie','Importer GDP cap.','Free Trade Agg.','Exporter GDP','Importer GDP'))+
+  scale_y_continuous(minor_breaks = seq(0, 0.3, 0.1))+ #breaks
+  
+  #coord_flip()+ #Horizontal
+  labs(   legend.position="right",
+          title="ANN Relative Feature Importance - Garson Method",
+          subtitle="Relative feature importance predicting trade in 2016 with Artificial Neural Network.\n25 Nodes & 0.001 decay | Caculated using the Garson Algorithm | 112 Countries",
+          y = "Realative importance",
+          x = NULL,
+          fill="Importance",
+          col="Importance",
+          caption ="Garson's Algorith - NeuralNetTool" )
+
+# scale_x_continuous(breaks = c(-25,0,25,50))
+p_r_importance_garson
+
+# #export
+tiff("p_r_importance_garson_ultimo.tiff", width = 10, height = 7, units = 'in', res = 300)
+
+p_r_importance_garson
+
+dev.off()
+
+
+## ---- OLSEN FEATURE IMPORTANCE ----
+p_r_importance_olden<-f_importance+
+  scale_y_continuous(breaks = c(-15,10,-5,5,0,5,10,15,20))+
+  theme_economist() +
+  #geom_hline(yintercept=-25, colour='white')+
+  #geom_hline(yintercept=25, colour='white')+
+  #geom_hline(yintercept=75, colour='white')+
+  theme(legend.position="right",
+        axis.title = element_text(size = 13),
+        axis.text = element_text(size = 13),
+        legend.text = element_text(size = 11),
+        legend.title=element_text(face = "bold", size = 13),
+        panel.grid.major.x = element_line(size=0.5),
+        panel.grid.major.y= element_line(size=0.5),
+        panel.grid.minor.y= element_line(size=0.4),
+        plot.subtitle=element_text(size=13),
+        plot.caption=element_text(size=12),
+        plot.margin = unit(c(0.6, 0.6, 0.3, 0.6), "cm"))+
+  coord_flip()+ #Horizontal+
+  #scale_y_continuous(breaks = seq(-50, 75, 25))+ #breaks
+  scale_x_discrete(labels = c(numTrans="Number of transshipments", deg_out16_O = "Exporter out-degree", "MaxShipSize" ="Max ship size", Maxmincarriers ="Max min carriers",deg_out16_D = "Importer out-degree", "dist" ="Maritime distance", colony1 ="Colonial-tie dummy", comlang1 ="Common Language dummy", "importer_gdp.pc" = "Importer GDP pc.", "exporter_gdp.pc" = "Exporter GDP pc.", fta_wto1 = "Free Trade Agreement dummy", "exporter_remote"="Exporter remoteness","importer_remote"="Importer remoteness", contig1 ="Contiguity dummy", "importer_gdp" ="Importer GDP","exporter_gdp" ="Exporter GDP"  ))+
+
+  #scale_x_discrete(labels = c('Exporter Remoteness','Maritime Distance','Colonial-tie','Com. off. lang','Importer GDP cap.','Free Trade Agg.','Importer Remoteness','Exporter GDP','Contingency','Exporter GDP cap.','Importer GDP'))+ #Better NAMES
+  #scale_y_continuous(minor_breaks = seq(-25, 75, 25))+
+    
+  #coord_flip()+ #Horizontal
+  labs(   legend.position="right",
+          title="ANN Relative Feature Importance - Olden Method",
+          subtitle="Relative feature importance and sign predicting trade in 2016. Artificial Neural Network\nwith 1 hidden layer, 25 nodes and 0.001 decay | Olden Method | 112 Countries",
+          y = "Realative importance and impact sign",
+          x = NULL,
+          fill="Importance\n+/- Sign",
+          col="Importance\n+/- Sign",
+          caption ="Olden Function - NeuralNetTool" )
+
+  # scale_x_continuous(breaks = c(-25,0,25,50))
+p_r_importance_olden
+
+
+
+# #export
+tiff("p_r_importance_olden_ultimo.tiff", width = 10, height = 7, units = 'in', res = 300)
+
+p_r_importance_olden
+
+dev.off()
+
+
+## ---- We can visualise the network using open source code available form GitHub: ----
+
+#install.packages("devtools")
+library(devtools)
+source_url('https://gist.githubusercontent.com/fawda123/7471137/raw/466c1474d0a505ff044412703516c34f1a4684a5/nnet_plot_update.r')
+
+#source_url('https://gist.githubusercontent.com/Peque/41a9e20d6687f2f3108d/raw/85e14f3a292e126f1454864427e3a189c2fe33f3/nnet_plot_update.r')
+
+
+plot.nnet(mar_tra.nnet.final)
+plot.nnet(mar_tra.nnet)
+plot.nnet(mar_tra.nnet,pos.col='darkgreen',neg.col='darkred',alpha.val=0.3,rel.rsc=15,
+          circle.cex=3.5,cex=1.2,
+          circle.col='cadetblue3',
+          cex.val = 0.7)
+
+plot.nnet(mar_tra.nnet.final,pos.col='darkgreen',neg.col='darkred',alpha.val=0.3,rel.rsc=15,
+          circle.cex=3.5,cex=1.2,
+          circle.col='cadetblue3',
+          cex.val = 0.7)
+
+# #export it 
+ tiff("p_net_final2.tiff", width = 10, height = 8, units = 'in', res = 300)
+
+
+plot.nnet(mar_tra.nnet.final,pos.col='darkgreen',neg.col='darkred',alpha.val=0.3,rel.rsc=15,
+          circle.cex=3.5,cex=1.2,
+          circle.col='cadetblue3',
+          cex.val = 0.7)
+
+dev.off()
+
+#OR
+
+plot(mar_tra.nnet.final, rep = 'best')
+
+## ---- PREDICT ----
+
+#Then we will use this model to predict (here we are using the same dataset which was used to train the model, however, the method would be the applicable if you were using new data):
+
+pred<-predict(mar_tra.nnet.final, cdata_ann_test)
+
+pred_vs_real<-cbind(pred,cdata_ann_test)
+
+plot(pred)
+
+
+summary(pred_vs_real$pred)
+
+pred_vs_real$difference<-(pred_vs_real$pred-pred_vs_real$TradeFlow)
+
+hist(pred_vs_real$pred)
+#hist(pred_vs_real$pred)
+
+pred_vs_real_r<-cbind(pred_vs_real$difference,pred,cdata_ann_testa)
+
+hist(pred_vs_real$difference)
+
+#Now plot the predicted vs observed data (figure 4):
+#x<-pred*50
+#y<- BostonHousing$medv
+
+
+pred_vs_real_r2 <- pred_vs_real_r[c(1:3)]
+
+## ---- Rescale ----
+pred_vs_real_r2$Rescale <- ((pred_vs_real_r2$pred)*(max_tr-min_tr))+min_tr
+pred_vs_real_r2$RescaleReal <- ((pred_vs_real_r2$TradeFlow)*(max_tr-min_tr))+min_tr
+
+#Rsquared
+cor(pred_vs_real_r2$Rescale,pred_vs_real_r2$RescaleReal)^2 #0.67
+
+## ---- RSME ----
+CalcRMSE(pred_vs_real_r2$Rescale,pred_vs_real_r2$RescaleReal) #7,026,284,873
+
+plot(pred_vs_real_r2$RescaleReal,pred_vs_real_r2$Rescale)
+
+
+plot(pred_vs_real_r2$RescaleReal,pred_vs_real_r2$Rescale, main="Neural network predictions vs observed", xlab="Observed", ylab="Predicted")
+
+hist(pred_vs_real_r2$RescaleReal)
+hist(log(pred_vs_real_r2$Rescale))
+hist(log(pred_vs_real_r2$RescaleReal))
+
+p_ann_prediction<-ggplot(pred_vs_real_r2, aes(x=RescaleReal+1, y=Rescale+1))+
+  geom_point(color = "steelblue", alpha = 0.6)+
+  #geom_abline(slope=1, intercept=0, alpha = 0.2)+
+  #scale_x_sqrt()+
+  #scale_y_sqrt()+
+  scale_x_continuous(trans ="log10",labels = scales::dollar,limits = c(1, 10000000000000))+
+  scale_y_continuous(trans ="log10",labels = scales::dollar,limits = c(1, 10000000000000))+
+  theme_economist()+
+  theme(legend.position="right",axis.title = element_text(size = 12),
+        legend.text = element_text(size = 11),
+        legend.title=element_text(face = "bold", size = 12),
+        panel.grid.major.x = element_line(size=0.5),
+        panel.grid.major.y= element_line(size=0.5),
+        plot.subtitle=element_text(size=13),
+        plot.caption=element_text(size=12),
+        plot.margin = unit(c(0.6, 0.6, 0.3, 0.6), "cm"))+
+  #labs(col="Export-Import\nBalance")+
+  labs(x = " Real Trade", y="Prediction")+
+  labs(title = "Out-of-sample prediction of bilateral trade by by Artificial Neural Network", 
+       subtitle = "Model prediction vs observed bilateral trade for 2016 in US Dollars using an Artifical Neural\n Network. 13 input variables, 25 hidden nodes, 0.001 learning rate | Train: 9946 observations,\nTest: 2486 | Log transformed axes.", 
+       caption = "With data from UN Comtrade, UNCTAD, World Bank and CEPII 2018")
+
+#### ---- Out-of-sample root mean squared error # (million USD) ----
+
+p_ann_prediction
+
+# #export
+tiff("p_ann_prediction2.tiff", width = 10, height = 6, units = 'in', res = 300)
+
+p_ann_prediction
+
+dev.off()
